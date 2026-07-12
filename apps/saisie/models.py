@@ -1,0 +1,35 @@
+import uuid
+from django.db import models
+from django.conf import settings
+
+class Ecriture(models.Model):
+    class Statut(models.TextChoices):
+        BROUILLARD = 'brouillard', 'Brouillard'
+        VALIDE = 'valide', 'Validé'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    numero = models.CharField(max_length=50) # e.g. ACH-2025-00001
+    journal = models.ForeignKey('plan_comptable.Journal', on_delete=models.CASCADE, related_name='ecritures')
+    date = models.DateField()
+    libelle = models.CharField(max_length=255)
+    statut = models.CharField(max_length=20, choices=Statut.choices, default=Statut.BROUILLARD)
+    saisiePar = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='ecritures_saisies')
+    validePar = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ecritures_validees')
+    piece = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.numero} - {self.libelle}"
+
+class LigneEcriture(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ecriture = models.ForeignKey(Ecriture, on_delete=models.CASCADE, related_name='lignes')
+    date = models.DateField()
+    compte = models.ForeignKey('plan_comptable.CompteComptable', on_delete=models.CASCADE, related_name='lignes')
+    libelleCompte = models.CharField(max_length=255, blank=True, null=True)
+    libelle = models.CharField(max_length=255)
+    debit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    auxiliaire = models.ForeignKey('plan_comptable.CompteComptable', on_delete=models.SET_NULL, blank=True, null=True, related_name='lignes_auxiliaires')
+
+    def __str__(self):
+        return f"{self.ecriture.numero} - {self.compte.numero} - {self.libelle}"
