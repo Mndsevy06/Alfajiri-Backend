@@ -29,7 +29,7 @@ class LigneEcriture(models.Model):
     libelle = models.CharField(max_length=255)
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    auxiliaire = models.ForeignKey('plan_comptable.CompteComptable', on_delete=models.SET_NULL, blank=True, null=True, related_name='lignes_auxiliaires')
-
+    centre_cout = models.CharField(max_length=255, blank=True, null=True)
+    tiers_auxiliaire = models.ForeignKey('plan_comptable.Tiers', on_delete=models.SET_NULL, blank=True, null=True, related_name='lignes_ecritures')
     def __str__(self):
         return f"{self.ecriture.numero} - {self.compte.numero} - {self.libelle}"

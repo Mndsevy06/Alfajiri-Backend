@@ -30,4 +30,6 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/plan_comptable/', include('apps.plan_comptable.urls')),
     path('api/saisie/', include('apps.saisie.urls')),
+    path('api/terrain/', include('apps.terrain.urls')),
+    path('api/users/', include('apps.authentification.urls')),
 ]

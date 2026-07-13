@@ -7,7 +7,7 @@ User = get_user_model()
 class LigneEcritureSerializer(serializers.ModelSerializer):
     class Meta:
         model = LigneEcriture
-        fields = ['id', 'date', 'compte', 'libelleCompte', 'libelle', 'debit', 'credit', 'auxiliaire']
+        fields = ['id', 'date', 'compte', 'libelleCompte', 'libelle', 'debit', 'credit', 'centre_cout', 'tiers_auxiliaire']
         read_only_fields = ['id']
 
 class EcritureSerializer(serializers.ModelSerializer):

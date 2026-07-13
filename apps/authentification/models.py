@@ -40,6 +40,8 @@ class User(AbstractUser):
         choices=Role.choices,
         default=Role.AGENT,
     )
+    nom = models.CharField(max_length=255, blank=True, null=True)
+    site = models.CharField(max_length=100, blank=True, null=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

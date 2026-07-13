@@ -59,6 +59,7 @@ class CompteComptable(models.Model):
     lettable = models.BooleanField(default=False) # Keep existing field to avoid breaking
     soumis_tva = models.BooleanField(default=False)
     analytique_obligatoire = models.BooleanField(default=False)
+    requiert_auxiliaire = models.BooleanField(default=False)
     code_poste_etats_financiers = models.CharField(max_length=255, null=True, blank=True)
     
     tiers = models.ForeignKey(Tiers, on_delete=models.SET_NULL, blank=True, null=True, related_name='comptes')
