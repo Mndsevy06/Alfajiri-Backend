@@ -5,6 +5,8 @@ class Immobilisation(models.Model):
     class Methode(models.TextChoices):
         LINEAIRE = 'lineaire', 'Linéaire'
         DEGRESSIVE = 'degressive', 'Dégressive'
+        EXCEPTIONNELLE = 'exceptionnelle', 'Exceptionnelle'
+        UNITES_OEUVRE = 'unites_oeuvre', 'Unités d\'œuvre'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=50)

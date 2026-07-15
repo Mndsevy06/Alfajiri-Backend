@@ -32,4 +32,6 @@ urlpatterns = [
     path('api/saisie/', include('apps.saisie.urls')),
     path('api/terrain/', include('apps.terrain.urls')),
     path('api/users/', include('apps.authentification.urls')),
+    path('api/etats_financiers/', include('apps.etats_financiers.urls')),
+    path('api/', include('apps.immobilisations.urls')),
 ]

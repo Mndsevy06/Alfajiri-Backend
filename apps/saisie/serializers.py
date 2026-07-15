@@ -30,6 +30,12 @@ class EcritureSerializer(serializers.ModelSerializer):
         lignes_data = validated_data.pop('lignes')
         validated_data['saisiePar'] = self.context['request'].user
         ecriture = Ecriture.objects.create(**validated_data)
+        
+        # Incrémenter le dernier numéro du journal
+        journal = ecriture.journal
+        journal.dernierNumero += 1
+        journal.save()
+        
         for ligne_data in lignes_data:
             LigneEcriture.objects.create(ecriture=ecriture, **ligne_data)
         return ecriture

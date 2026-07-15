@@ -8,14 +8,14 @@ class Ecriture(models.Model):
         VALIDE = 'valide', 'Validé'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    numero = models.CharField(max_length=50) # e.g. ACH-2025-00001
+    numero = models.CharField(max_length=50, unique=True) # e.g. ACH-2025-00001
     journal = models.ForeignKey('plan_comptable.Journal', on_delete=models.CASCADE, related_name='ecritures')
     date = models.DateField()
     libelle = models.CharField(max_length=255)
     statut = models.CharField(max_length=20, choices=Statut.choices, default=Statut.BROUILLARD)
     saisiePar = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='ecritures_saisies')
     validePar = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ecritures_validees')
-    piece = models.CharField(max_length=255, blank=True, null=True)
+    piece = models.CharField(max_length=255, blank=True, null=True, unique=True)
 
     def __str__(self):
         return f"{self.numero} - {self.libelle}"
