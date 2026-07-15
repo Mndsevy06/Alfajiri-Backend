@@ -1,3 +1,6 @@
 from django.contrib import admin
+from .models import CircuitLogistique, EtapeCircuit, Expedition
 
-# Register your models here.
+admin.site.register(CircuitLogistique)
+admin.site.register(EtapeCircuit)
+admin.site.register(Expedition)

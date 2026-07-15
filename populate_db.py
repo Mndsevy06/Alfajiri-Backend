@@ -57,6 +57,59 @@ def run():
         )
         if created: print(f"Created Compte: {c_data['numero']}")
 
+    # 4. Populating some mock Camions for Logistique
+    from apps.logistique.models import Camion
+    from django.utils import timezone
+    
+    camions_mock = [
+        {
+            'immat': 'IT-3456-ZA',
+            'chauffeur': 'Jean Kasongo',
+            'transporteur': 'Buks Haulage',
+            'chargement': 32.5,
+            'statut': Camion.Statut.TRANSIT_RDC,
+            'progression': 80,
+            'bl': 'BL-2024-001',
+            'position': 'Kasumbalesa',
+            'factureTransport': 3500.00,
+            'douaneMontant': 1200.00,
+            'dateDepart': timezone.now()
+        },
+        {
+            'immat': 'ZA-1298-GP',
+            'chauffeur': 'Paul Smith',
+            'transporteur': 'Sable Transport',
+            'chargement': 31.0,
+            'statut': Camion.Statut.DOUANE_ZAMBIE,
+            'progression': 50,
+            'bl': 'BL-2024-002',
+            'position': 'Chirundu',
+            'factureTransport': 3200.00,
+            'douaneMontant': 0.00,
+            'dateDepart': timezone.now()
+        },
+        {
+            'immat': 'CD-9988-LUS',
+            'chauffeur': 'Marc Ilunga',
+            'transporteur': 'Trans-Africa',
+            'chargement': 34.2,
+            'statut': Camion.Statut.CHARGEMENT,
+            'progression': 10,
+            'bl': 'BL-2024-003',
+            'position': 'Ndola',
+            'factureTransport': 3800.00,
+            'douaneMontant': 0.00,
+            'dateDepart': timezone.now()
+        }
+    ]
+    
+    for c_data in camions_mock:
+        obj, created = Camion.objects.get_or_create(
+            immat=c_data['immat'],
+            defaults=c_data
+        )
+        if created: print(f"Created Camion: {c_data['immat']}")
+
     print("Database population complete.")
 
 if __name__ == '__main__':

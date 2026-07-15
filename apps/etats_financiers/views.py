@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .services import get_balance, get_grand_livre, get_bilan, get_compte_resultat, get_journaux_centralisation, get_tafire
 from .models import CloturePeriode
-from apps.saisie.models import Ecriture
-from apps.rapprochement.models import LigneReleve, LigneCompta
+from apps.saisie.models import Ecriture, LigneEcriture
+from apps.rapprochement.models import LigneReleve
 from apps.immobilisations.models import Immobilisation
 
 class BalanceView(APIView):
@@ -112,7 +112,7 @@ class VerifyClotureStepView(APIView):
 
         elif step_id == 'rapprochement_bancaire':
             # Check for un-reconciled lines
-            count_non_pointees = LigneReleve.objects.filter(pointe=False).count() + LigneCompta.objects.filter(pointe=False).count()
+            count_non_pointees = LigneReleve.objects.filter(rapprochement__isnull=True).count() + LigneEcriture.objects.filter(compte__numero__startswith='52', rapprochement__isnull=True).count()
             if count_non_pointees > 0:
                 return Response({
                     'status': 'error',
