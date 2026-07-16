@@ -3,6 +3,7 @@ from django.db import models
 from django.core.validators import MinValueValidator
 
 class CircuitLogistique(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nom = models.CharField(max_length=150, unique=True, help_text="Nom du circuit (ex: Import Zambie -> RDC)")
     description = models.TextField(blank=True, null=True)
@@ -13,6 +14,7 @@ class CircuitLogistique(models.Model):
         return self.nom
 
 class EtapeCircuit(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     circuit = models.ForeignKey(CircuitLogistique, on_delete=models.CASCADE, related_name='etapes')
     nom = models.CharField(max_length=100)
@@ -28,6 +30,7 @@ class EtapeCircuit(models.Model):
         return f"{self.ordre}. {self.nom} ({self.circuit.nom})"
 
 class Expedition(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     identifiant = models.CharField(max_length=50, help_text="Plaque d'immatriculation, N° de vol, N° conteneur...")
     responsable = models.CharField(max_length=255, help_text="Chauffeur, Capitaine, etc.")

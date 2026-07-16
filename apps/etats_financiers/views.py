@@ -11,56 +11,75 @@ class BalanceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         date_debut = request.query_params.get('date_debut')
         date_fin = request.query_params.get('date_fin')
-        balance = get_balance(date_debut, date_fin)
+        balance = get_balance(date_debut, date_fin, entite_id)
         return Response(balance)
 
 class GrandLivreView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         date_debut = request.query_params.get('date_debut')
         date_fin = request.query_params.get('date_fin')
         compte_numero = request.query_params.get('compte')
-        grand_livre = get_grand_livre(date_debut, date_fin, compte_numero)
+        grand_livre = get_grand_livre(date_debut, date_fin, compte_numero, entite_id)
         return Response(grand_livre)
 
 class BilanView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        bilan = get_bilan()
+        entite_id = request.headers.get('X-Entite-ID')
+        bilan = get_bilan(entite_id)
         return Response(bilan)
 
 class CompteResultatView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cr = get_compte_resultat()
+        entite_id = request.headers.get('X-Entite-ID')
+        cr = get_compte_resultat(entite_id)
         return Response(cr)
 
 class JournauxCentralisationView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         date_debut = request.query_params.get('date_debut')
         date_fin = request.query_params.get('date_fin')
-        journaux = get_journaux_centralisation(date_debut, date_fin)
+        journaux = get_journaux_centralisation(date_debut, date_fin, entite_id)
         return Response(journaux)
 
 class TafireView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        tafire = get_tafire()
+        entite_id = request.headers.get('X-Entite-ID')
+        tafire = get_tafire(entite_id)
         return Response(tafire)
 
 class CloturePeriodeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, periode):
-        cloture, _ = CloturePeriode.objects.get_or_create(periode=periode)
+        entite_id = request.headers.get('X-Entite-ID')
+        if not entite_id:
+            return Response({
+                'periode': periode,
+                'centralisation_journaux': False,
+                'rapprochement_bancaire': False,
+                'inventaire_stocks': False,
+                'amortissements_provisions': False,
+                'regularisation_charges_produits': False,
+                'arrete_comptes_tiers': False,
+                'validation_commissaire': False,
+            })
+            
+        cloture, _ = CloturePeriode.objects.get_or_create(periode=periode, dossier_id=entite_id)
         data = {
             'periode': cloture.periode,
             'centralisation_journaux': cloture.centralisation_journaux,
@@ -74,7 +93,11 @@ class CloturePeriodeView(APIView):
         return Response(data)
 
     def put(self, request, periode):
-        cloture, _ = CloturePeriode.objects.get_or_create(periode=periode)
+        entite_id = request.headers.get('X-Entite-ID')
+        if not entite_id:
+            return Response({'error': 'X-Entite-ID manquant pour la modification'}, status=400)
+            
+        cloture, _ = CloturePeriode.objects.get_or_create(periode=periode, dossier_id=entite_id)
         
         field = request.data.get('field')
         value = request.data.get('value')
@@ -99,9 +122,16 @@ class VerifyClotureStepView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, step_id, periode):
+        entite_id = request.headers.get('X-Entite-ID')
+        
         if step_id == 'centralisation_journaux':
             # Check for entries in brouillard
-            count_brouillard = Ecriture.objects.filter(statut='brouillard').count()
+            qs = Ecriture.objects.filter(statut='brouillard')
+            if entite_id:
+                qs = qs.filter(dossier_id=entite_id)
+            else:
+                qs = qs.none()
+            count_brouillard = qs.count()
             if count_brouillard > 0:
                 return Response({
                     'status': 'error',
@@ -112,7 +142,15 @@ class VerifyClotureStepView(APIView):
 
         elif step_id == 'rapprochement_bancaire':
             # Check for un-reconciled lines
-            count_non_pointees = LigneReleve.objects.filter(rapprochement__isnull=True).count() + LigneEcriture.objects.filter(compte__numero__startswith='52', rapprochement__isnull=True).count()
+            qs1 = LigneReleve.objects.filter(rapprochement__isnull=True)
+            qs2 = LigneEcriture.objects.filter(compte__numero__startswith='52', rapprochement__isnull=True)
+            if entite_id:
+                qs1 = qs1.filter(dossier_id=entite_id)
+                qs2 = qs2.filter(dossier_id=entite_id)
+            else:
+                qs1 = qs1.none()
+                qs2 = qs2.none()
+            count_non_pointees = qs1.count() + qs2.count()
             if count_non_pointees > 0:
                 return Response({
                     'status': 'error',
@@ -123,7 +161,12 @@ class VerifyClotureStepView(APIView):
 
         elif step_id == 'amortissements_provisions':
             # Basic check: are there immobilisations with 0 cumulAmortissement but value > 0?
-            count_no_amort = Immobilisation.objects.filter(cumulAmortissement=0, valeurAcquisition__gt=0).count()
+            qs3 = Immobilisation.objects.filter(cumulAmortissement=0, valeurAcquisition__gt=0)
+            if entite_id:
+                qs3 = qs3.filter(dossier_id=entite_id)
+            else:
+                qs3 = qs3.none()
+            count_no_amort = qs3.count()
             if count_no_amort > 0:
                 return Response({
                     'status': 'error',

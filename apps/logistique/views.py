@@ -1,3 +1,4 @@
+from core.mixins import DossierScopedViewSetMixin
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,17 +6,17 @@ from django.utils import timezone
 from .models import CircuitLogistique, EtapeCircuit, Expedition
 from .serializers import CircuitLogistiqueSerializer, EtapeCircuitSerializer, ExpeditionSerializer
 
-class CircuitLogistiqueViewSet(viewsets.ModelViewSet):
+class CircuitLogistiqueViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = CircuitLogistique.objects.all()
     serializer_class = CircuitLogistiqueSerializer
 
-class EtapeCircuitViewSet(viewsets.ModelViewSet):
+class EtapeCircuitViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = EtapeCircuit.objects.all().order_by('circuit', 'ordre')
     serializer_class = EtapeCircuitSerializer
     # allow filtering by circuit
     filterset_fields = ['circuit']
 
-class ExpeditionViewSet(viewsets.ModelViewSet):
+class ExpeditionViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Expedition.objects.all().order_by('-date_depart', 'identifiant')
     serializer_class = ExpeditionSerializer
 

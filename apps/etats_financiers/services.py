@@ -4,12 +4,17 @@ from decimal import Decimal
 from apps.plan_comptable.models import CompteComptable
 from apps.saisie.models import LigneEcriture, Ecriture
 
-def get_balance(date_debut=None, date_fin=None):
+def get_balance(date_debut=None, date_fin=None, entite_id=None):
     """
     Retourne la balance de tous les comptes ayant eu un mouvement.
     """
     lignes = LigneEcriture.objects.filter(ecriture__statut=Ecriture.Statut.VALIDE)
     
+    if entite_id:
+        lignes = lignes.filter(dossier_id=entite_id)
+    else:
+        lignes = lignes.none()
+        
     if date_debut:
         lignes = lignes.filter(date__gte=date_debut)
     if date_fin:
@@ -45,7 +50,7 @@ def get_balance(date_debut=None, date_fin=None):
         
     return balance
 
-def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None):
+def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_id=None):
     """
     Retourne le détail des écritures groupé par compte.
     """
@@ -53,6 +58,11 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None):
         'ecriture', 'ecriture__journal', 'compte'
     ).order_by('compte__numero', 'date', 'ecriture__numero')
     
+    if entite_id:
+        lignes = lignes.filter(dossier_id=entite_id)
+    else:
+        lignes = lignes.none()
+        
     if date_debut:
         lignes = lignes.filter(date__gte=date_debut)
     if date_fin:
@@ -86,11 +96,11 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None):
     # Transformer en liste
     return list(grand_livre.values())
 
-def get_bilan():
+def get_bilan(entite_id=None):
     """
     Construit le bilan à partir de la balance (comptes 1 à 5).
     """
-    balance = get_balance()
+    balance = get_balance(entite_id=entite_id)
     
     bilan = {
         'actif': {
@@ -203,11 +213,11 @@ def get_bilan():
 
     return bilan
 
-def get_compte_resultat():
+def get_compte_resultat(entite_id=None):
     """
     Construit le compte de résultat (comptes 6 et 7).
     """
-    balance = get_balance()
+    balance = get_balance(entite_id=entite_id)
     
     cr = {
         'produits': {
@@ -266,12 +276,17 @@ def get_compte_resultat():
     
     return cr
 
-def get_journaux_centralisation(date_debut=None, date_fin=None):
+def get_journaux_centralisation(date_debut=None, date_fin=None, entite_id=None):
     """
     Retourne la centralisation des écritures par journal.
     """
     lignes = LigneEcriture.objects.filter(ecriture__statut=Ecriture.Statut.VALIDE)
     
+    if entite_id:
+        lignes = lignes.filter(dossier_id=entite_id)
+    else:
+        lignes = lignes.none()
+        
     if date_debut:
         lignes = lignes.filter(date__gte=date_debut)
     if date_fin:
@@ -286,12 +301,12 @@ def get_journaux_centralisation(date_debut=None, date_fin=None):
     
     return list(journaux_data)
 
-def get_tafire():
+def get_tafire(entite_id=None):
     """
     Calcule le TAFIRE (Soldes Intermédiaires de Gestion simplifiés OHADA).
     """
-    cr = get_compte_resultat()
-    balance = {ligne['compte']: ligne for ligne in get_balance()}
+    cr = get_compte_resultat(entite_id=entite_id)
+    balance = {ligne['compte']: ligne for ligne in get_balance(entite_id=entite_id)}
     
     def sum_comptes(prefix, is_charge=False):
         total = Decimal('0.00')

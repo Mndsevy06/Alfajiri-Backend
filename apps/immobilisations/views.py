@@ -1,10 +1,11 @@
+from core.mixins import DossierScopedViewSetMixin
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Immobilisation
 from .serializers import ImmobilisationSerializer
 
-class ImmobilisationViewSet(viewsets.ModelViewSet):
+class ImmobilisationViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Immobilisation.objects.all()
     serializer_class = ImmobilisationSerializer
     @action(detail=False, methods=['get'])

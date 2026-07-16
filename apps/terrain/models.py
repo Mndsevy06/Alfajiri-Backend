@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 
 class OperationTerrain(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     TYPE_OP_CHOICES = [
         ('depense', 'Dépense'),
         ('recette', 'Recette'),

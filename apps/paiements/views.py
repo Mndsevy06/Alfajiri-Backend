@@ -1,9 +1,10 @@
+from core.mixins import DossierScopedViewSetMixin
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from .models import Paiement
 from .serializers import PaiementSerializer
 
-class PaiementViewSet(viewsets.ModelViewSet):
+class PaiementViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Paiement.objects.all()
     serializer_class = PaiementSerializer
     permission_classes = [IsAuthenticated]

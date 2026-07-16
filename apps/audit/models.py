@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 
 class AuditEntry(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     timestamp = models.DateTimeField(auto_now_add=True)
     utilisateur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)

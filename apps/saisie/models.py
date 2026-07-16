@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 
 class Ecriture(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class Statut(models.TextChoices):
         BROUILLARD = 'brouillard', 'Brouillard'
         VALIDE = 'valide', 'Validé'
@@ -21,6 +22,7 @@ class Ecriture(models.Model):
         return f"{self.numero} - {self.libelle}"
 
 class LigneEcriture(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ecriture = models.ForeignKey(Ecriture, on_delete=models.CASCADE, related_name='lignes')
     date = models.DateField()

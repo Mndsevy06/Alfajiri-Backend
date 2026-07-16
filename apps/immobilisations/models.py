@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 
 class Immobilisation(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class Methode(models.TextChoices):
         LINEAIRE = 'lineaire', 'Linéaire'
         DEGRESSIVE = 'degressive', 'Dégressive'

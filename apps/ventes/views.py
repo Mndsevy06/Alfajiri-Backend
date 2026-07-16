@@ -1,9 +1,10 @@
+from core.mixins import DossierScopedViewSetMixin
 from rest_framework import viewsets
 from django.utils import timezone
 from .models import Facture
 from .serializers import FactureSerializer, FactureReadSerializer
 
-class FactureViewSet(viewsets.ModelViewSet):
+class FactureViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Facture.objects.all().order_by('-date', '-numero')
     
     def get_serializer_class(self):

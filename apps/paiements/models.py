@@ -3,6 +3,7 @@ from django.db import models
 from apps.plan_comptable.models import Tiers
 
 class Paiement(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class TypeOperation(models.TextChoices):
         ENCAISSEMENT = 'encaissement', 'Encaissement'
         DECAISSEMENT = 'decaissement', 'Décaissement'

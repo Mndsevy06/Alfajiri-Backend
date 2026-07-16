@@ -59,9 +59,11 @@ INSTALLED_APPS = [
     'apps.plan_comptable',
     'apps.rapprochement',
     'apps.restitutions',
+    'apps.rh',
     'apps.saisie',
     'apps.terrain',
     'apps.ventes',
+    'apps.fiscalite',
 ]
 
 MIDDLEWARE = [

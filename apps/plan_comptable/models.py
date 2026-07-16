@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 
 class Journal(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class TypeJournal(models.TextChoices):
         ACHATS = 'achats', 'Achats'
         VENTES = 'ventes', 'Ventes'
@@ -19,6 +20,7 @@ class Journal(models.Model):
         return f"{self.code} - {self.libelle}"
 
 class Tiers(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class TypeTiers(models.TextChoices):
         FOURNISSEUR = 'fournisseur', 'Fournisseur'
         CLIENT = 'client', 'Client'
@@ -37,6 +39,7 @@ class Tiers(models.Model):
         return f"{self.code} - {self.nom}"
 
 class CompteComptable(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class TypeCompte(models.TextChoices):
         GENERAL = 'general', 'Général'
         AUXILIAIRE = 'auxiliaire', 'Auxiliaire'

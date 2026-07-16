@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 
 class Facture(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class Statut(models.TextChoices):
         IMPAYEE = 'impayee', 'Impayée'
         PAYEE = 'payee', 'Payée'

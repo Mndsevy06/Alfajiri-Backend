@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, RolePermission
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -17,3 +17,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password')
         user = User.objects.create_user(password=password, **validated_data)
         return user
+
+class RolePermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolePermission
+        fields = ['id', 'role', 'permissions']

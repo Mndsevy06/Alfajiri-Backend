@@ -18,8 +18,14 @@ class LigneReleveView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         # Lignes non pointées
-        lignes = LigneReleve.objects.filter(rapprochement__isnull=True).order_by('date')
+        lignes = LigneReleve.objects.filter(rapprochement__isnull=True)
+        if entite_id:
+            lignes = lignes.filter(dossier_id=entite_id)
+        else:
+            lignes = lignes.none()
+        lignes = lignes.order_by('date')
         serializer = LigneReleveSerializer(lignes, many=True)
         return Response(serializer.data)
 
@@ -27,11 +33,17 @@ class LigneComptaView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         compte = request.query_params.get('compte', '521')
         lignes = LigneEcriture.objects.filter(
             compte__numero__startswith=compte[:2],
             rapprochement__isnull=True
-        ).order_by('date')
+        )
+        if entite_id:
+            lignes = lignes.filter(dossier_id=entite_id)
+        else:
+            lignes = lignes.none()
+        lignes = lignes.order_by('date')
         serializer = LigneEcritureRapprochementSerializer(lignes, many=True)
         return Response(serializer.data)
 
@@ -40,6 +52,7 @@ class ImportReleveView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         file_obj = request.FILES.get('file')
         if not file_obj:
             return Response({'error': 'Aucun fichier fourni'}, status=status.HTTP_400_BAD_REQUEST)
@@ -62,6 +75,7 @@ class ImportReleveView(APIView):
                     date_obj = datetime.datetime.strptime(date_str, '%d/%m/%Y').date() if '/' in date_str else datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
                     
                     LigneReleve.objects.create(
+                        dossier_id=entite_id,
                         date=date_obj,
                         libelle=libelle,
                         reference=reference,
@@ -82,6 +96,7 @@ class LettrageManuelView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         releve_ids = request.data.get('releve_ids', [])
         compta_ids = request.data.get('compta_ids', [])
 
@@ -90,6 +105,12 @@ class LettrageManuelView(APIView):
 
         releves = LigneReleve.objects.filter(id__in=releve_ids, rapprochement__isnull=True)
         comptas = LigneEcriture.objects.filter(id__in=compta_ids, rapprochement__isnull=True)
+        if entite_id:
+            releves = releves.filter(dossier_id=entite_id)
+            comptas = comptas.filter(dossier_id=entite_id)
+        else:
+            releves = releves.none()
+            comptas = comptas.none()
 
         if len(releves) != len(releve_ids) or len(comptas) != len(compta_ids):
             return Response({'error': 'Certaines lignes sont déjà lettrées ou introuvables.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -102,7 +123,7 @@ class LettrageManuelView(APIView):
             return Response({'error': f'Écart non nul. Relevé: {total_releve}, Compta: {total_compta}'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create Rapprochement
-        rapprochement = Rapprochement.objects.create(valide_par=request.user)
+        rapprochement = Rapprochement.objects.create(valide_par=request.user, dossier_id=entite_id)
         
         for r in releves:
             r.rapprochement = rapprochement
@@ -121,8 +142,15 @@ class LettrageAutoView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         releves = LigneReleve.objects.filter(rapprochement__isnull=True)
         comptas = LigneEcriture.objects.filter(compte__numero__startswith='52', rapprochement__isnull=True)
+        if entite_id:
+            releves = releves.filter(dossier_id=entite_id)
+            comptas = comptas.filter(dossier_id=entite_id)
+        else:
+            releves = releves.none()
+            comptas = comptas.none()
         
         matched_count = 0
         for r in releves:
@@ -144,7 +172,7 @@ class LettrageAutoView(APIView):
                         break
             
             if match:
-                rapprochement = Rapprochement.objects.create(valide_par=request.user)
+                rapprochement = Rapprochement.objects.create(valide_par=request.user, dossier_id=entite_id)
                 r.rapprochement = rapprochement
                 r.pointe = True
                 r.save()
@@ -159,12 +187,15 @@ class GenererODView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
         releve_id = request.data.get('releve_id')
         compte_od_numero = request.data.get('compte_od') # e.g. '627'
         compte_banque_numero = request.data.get('compte_banque', '521')
         
         try:
             releve = LigneReleve.objects.get(id=releve_id, rapprochement__isnull=True)
+            if entite_id and str(releve.dossier_id) != str(entite_id):
+                return Response({'error': 'Ligne de relevé introuvable ou déjà rapprochée.'}, status=status.HTTP_400_BAD_REQUEST)
             
             try:
                 compte_od = CompteComptable.objects.get(numero=compte_od_numero)
@@ -190,6 +221,7 @@ class GenererODView(APIView):
 
         # Create Ecriture
         ecriture = Ecriture.objects.create(
+            dossier_id=entite_id,
             numero=f"OD-{datetime.date.today().strftime('%Y%m')}-{releve.id.hex[:6].upper()}",
             journal=journal,
             date=releve.date,
@@ -210,6 +242,7 @@ class GenererODView(APIView):
             credit_cpt = compte_od
 
         LigneEcriture.objects.create(
+            dossier_id=entite_id,
             ecriture=ecriture,
             date=releve.date,
             compte=debit_cpt,
@@ -219,6 +252,7 @@ class GenererODView(APIView):
         )
         
         ligne_banque = LigneEcriture.objects.create(
+            dossier_id=entite_id,
             ecriture=ecriture,
             date=releve.date,
             compte=credit_cpt,
@@ -228,7 +262,7 @@ class GenererODView(APIView):
         )
 
         # Rapprochement
-        rapprochement = Rapprochement.objects.create(valide_par=request.user)
+        rapprochement = Rapprochement.objects.create(valide_par=request.user, dossier_id=entite_id)
         releve.rapprochement = rapprochement
         releve.pointe = True
         releve.save()

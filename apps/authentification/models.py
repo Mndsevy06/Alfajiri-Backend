@@ -50,3 +50,10 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.email} ({self.role})"
+
+class RolePermission(models.Model):
+    role = models.CharField(max_length=50, choices=User.Role.choices, unique=True)
+    permissions = models.JSONField(default=dict)
+
+    def __str__(self):
+        return f"Permissions pour {self.role}"

@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 
 class Rapprochement(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     date_rapprochement = models.DateTimeField(auto_now_add=True)
     valide_par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
@@ -11,6 +12,7 @@ class Rapprochement(models.Model):
         return f"Rapprochement {self.id} du {self.date_rapprochement.strftime('%Y-%m-%d')}"
 
 class LigneReleve(models.Model):
+    dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
     class Sens(models.TextChoices):
         DEBIT = 'debit', 'Débit'
         CREDIT = 'credit', 'Crédit'
