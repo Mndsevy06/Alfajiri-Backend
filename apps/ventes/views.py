@@ -17,4 +17,9 @@ class FactureViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
         current_year = timezone.now().year
         count = Facture.objects.filter(date__year=current_year).count() + 1
         numero = f"FAC-VTE-{current_year}-{count:04d}"
-        serializer.save(numero=numero)
+        
+        entite_id = self.request.headers.get('X-Entite-ID')
+        if entite_id:
+            serializer.save(numero=numero, dossier_id=entite_id)
+        else:
+            serializer.save(numero=numero)
