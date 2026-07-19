@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/ventes/', include('apps.ventes.urls')),
     path('api/fiscalite/', include('apps.fiscalite.urls')),
     path('api/parametres/', include('apps.parametres.urls')),
+    path('api/notifications/', include('apps.notifications.urls')),
 ]
 
 if settings.DEBUG:

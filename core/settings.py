@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'apps.terrain',
     'apps.ventes',
     'apps.fiscalite',
+    'apps.notifications',
 ]
 
 MIDDLEWARE = [
