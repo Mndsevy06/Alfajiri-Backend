@@ -34,6 +34,7 @@ class Tiers(models.Model):
     compte = models.CharField(max_length=50, blank=True, null=True) # Reference to CompteComptable, but can be CharField to avoid circular/hard dependency or FK
     soldeDebit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     soldeCredit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    photo_profil = models.ImageField(upload_to='tiers_photos/', null=True, blank=True)
 
     def __str__(self):
         return f"{self.code} - {self.nom}"

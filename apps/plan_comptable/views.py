@@ -10,6 +10,16 @@ class JournalViewSet(DossierScopedViewSetMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = JournalSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = super(DossierScopedViewSetMixin, self).get_queryset()
+        entite_id = self.request.headers.get('X-Entite-ID')
+        
+        if entite_id:
+            queryset = queryset.filter(Q(dossier_id=entite_id) | Q(dossier__isnull=True))
+        else:
+            queryset = queryset.filter(dossier__isnull=True)
+        return queryset
+
 class CompteComptableViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = CompteComptable.objects.all()
     serializer_class = CompteComptableSerializer

@@ -33,6 +33,7 @@ class LigneEcriture(models.Model):
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     centre_cout = models.CharField(max_length=255, blank=True, null=True)
     tiers_auxiliaire = models.ForeignKey('plan_comptable.Tiers', on_delete=models.SET_NULL, blank=True, null=True, related_name='lignes_ecritures')
+    fichier = models.FileField(upload_to='justificatifs_comptables/%Y/%m/', blank=True, null=True)
     rapprochement = models.ForeignKey('rapprochement.Rapprochement', on_delete=models.SET_NULL, null=True, blank=True, related_name='lignes_ecriture')
 
     def __str__(self):

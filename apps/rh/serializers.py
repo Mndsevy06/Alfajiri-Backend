@@ -9,6 +9,7 @@ class ContratSerializer(serializers.ModelSerializer):
 
 class BulletinPaieSerializer(serializers.ModelSerializer):
     employe_nom = serializers.CharField(source='employe.nom', read_only=True)
+    employe_photo_profil = serializers.ImageField(source='employe.photo_profil', read_only=True)
     
     class Meta:
         model = BulletinPaie

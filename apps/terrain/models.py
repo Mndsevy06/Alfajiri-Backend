@@ -18,6 +18,8 @@ class OperationTerrain(models.Model):
     nature = models.CharField(max_length=255)
     notes = models.TextField(blank=True, null=True)
     has_photo = models.BooleanField(default=False)
+    fichier = models.FileField(upload_to='justificatifs_terrain/%Y/%m/', blank=True, null=True)
+    saisie_par = models.ForeignKey('authentification.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='operations_terrain')
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     date_creation = models.DateTimeField(default=timezone.now)
 

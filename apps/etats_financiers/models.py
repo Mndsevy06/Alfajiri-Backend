@@ -2,7 +2,7 @@ from django.db import models
 
 class CloturePeriode(models.Model):
     dossier = models.ForeignKey('parametres.Dossier', on_delete=models.CASCADE, null=True, blank=True, related_name='%(class)s_dossier')
-    periode = models.CharField(max_length=7, unique=True, help_text="Format YYYY-MM ou YYYY")
+    periode = models.CharField(max_length=7, help_text="Format YYYY-MM ou YYYY")
     # Checklist de clôture
     centralisation_journaux = models.BooleanField(default=False)
     rapprochement_bancaire = models.BooleanField(default=False)
@@ -16,3 +16,6 @@ class CloturePeriode(models.Model):
 
     def __str__(self):
         return f"Clôture {self.periode}"
+
+    class Meta:
+        unique_together = ('periode', 'dossier')
