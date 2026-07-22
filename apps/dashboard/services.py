@@ -74,7 +74,7 @@ class DashboardService:
     @staticmethod
     def get_explosion_charges(dossier_id=None):
         if not dossier_id: return []
-        charges = CompteComptable.objects.filter(numero__startswith='6', parent__isnull=True).exclude(numero='6')
+        charges = CompteComptable.objects.filter(numero__startswith='6', parent__isnull=True, dossier_id=dossier_id).exclude(numero='6')
         data = []
         colors = ['hsl(221 83% 53%)', 'hsl(38 92% 50%)', 'hsl(142 71% 45%)', 'hsl(280 65% 60%)', 'hsl(0 84% 60%)', 'hsl(24 95% 53%)']
         

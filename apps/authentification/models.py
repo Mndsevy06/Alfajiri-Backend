@@ -43,6 +43,12 @@ class User(AbstractUser):
     nom = models.CharField(max_length=255, blank=True, null=True)
     site = models.CharField(max_length=100, blank=True, null=True)
     photo_profil = models.ImageField(upload_to='profiles/', null=True, blank=True)
+    dossiers = models.ManyToManyField(
+        'parametres.Dossier',
+        blank=True,
+        related_name='utilisateurs',
+        verbose_name=_('Dossiers assignés')
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

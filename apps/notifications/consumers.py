@@ -30,13 +30,19 @@ def get_user_from_token(token_key: str):
 
 
 @database_sync_to_async
-def get_recent_notifications(user):
-    qs = Notification.objects.filter(
-        user=user, lu=False
-    ).order_by('-cree_le')[:30]
+def get_recent_notifications(user, dossier_id=None):
+    from django.db.models import Q
+    qs = Notification.objects.filter(user=user)
+    if dossier_id:
+        qs = qs.filter(Q(dossier_id=dossier_id) | Q(dossier__isnull=True))
+    else:
+        qs = qs.filter(dossier__isnull=True)
+        
+    qs = qs.order_by('-cree_le')[:30]
     return [
         {
             'id': str(n.id),
+            'dossier_id': str(n.dossier_id) if n.dossier_id else None,
             'titre': n.titre,
             'message': n.message,
             'type': n.type,
@@ -55,6 +61,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         # Authentification JWT via query string
         qs = parse_qs(self.scope['query_string'].decode())
         token = qs.get('token', [None])[0]
+        self.dossier_id = qs.get('dossier_id', [None])[0]
 
         if not token:
             await self.close(code=4001)
@@ -77,7 +84,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
         # Envoyer l'historique des notifications non lues à la connexion
-        history = await get_recent_notifications(self.user)
+        history = await get_recent_notifications(self.user, self.dossier_id)
         await self.send(text_data=json.dumps({
             'type': 'NOTIFICATION_HISTORY',
             'notifications': history,
@@ -118,11 +125,22 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _mark_all_read(self) -> int:
-        return Notification.objects.filter(user=self.user, lu=False).update(lu=True)
+        from django.db.models import Q
+        qs = Notification.objects.filter(user=self.user, lu=False)
+        if self.dossier_id:
+            qs = qs.filter(Q(dossier_id=self.dossier_id) | Q(dossier__isnull=True))
+        else:
+            qs = qs.filter(dossier__isnull=True)
+        return qs.update(lu=True)
 
     # Handler appelé par channel_layer.group_send
     async def notification_message(self, event):
-        await self.send(text_data=json.dumps({
-            'type': 'NEW_NOTIFICATION',
-            'notification': event['notification'],
-        }))
+        notification = event['notification']
+        notif_dossier_id = notification.get('dossier_id')
+        
+        # Filtre côté client : envoyer uniquement si global ou correspond à l'entité active
+        if not notif_dossier_id or not self.dossier_id or str(notif_dossier_id) == str(self.dossier_id):
+            await self.send(text_data=json.dumps({
+                'type': 'NEW_NOTIFICATION',
+                'notification': notification,
+            }))

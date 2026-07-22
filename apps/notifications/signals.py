@@ -10,7 +10,29 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from .models import Notification
-from .services import send_notification, notify_roles, notify_all_admins
+from .services import send_notification as _raw_send_notification, notify_roles as _raw_notify_roles, notify_all_admins as _raw_notify_all_admins
+
+def _auto_dossier_wrap(func):
+    import inspect
+    def wrapper(*args, **kwargs):
+        if 'dossier' not in kwargs:
+            # Traverse call stack to find 'instance' from Django signal receiver
+            frame = inspect.currentframe().f_back
+            while frame:
+                locs = frame.f_locals
+                if 'instance' in locs:
+                    inst = locs['instance']
+                    dossier = getattr(inst, 'dossier', None)
+                    if dossier:
+                        kwargs['dossier'] = dossier
+                        break
+                frame = frame.f_back
+        return func(*args, **kwargs)
+    return wrapper
+
+send_notification = _auto_dossier_wrap(_raw_send_notification)
+notify_roles = _auto_dossier_wrap(_raw_notify_roles)
+notify_all_admins = _auto_dossier_wrap(_raw_notify_all_admins)
 
 logger = logging.getLogger(__name__)
 

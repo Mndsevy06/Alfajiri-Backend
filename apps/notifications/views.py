@@ -12,9 +12,25 @@ class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = Notification.objects.filter(user=request.user).order_by('-cree_le')[:50]
+        entite_id = request.headers.get('X-Entite-ID')
+        from django.db.models import Q
+        
+        qs = Notification.objects.filter(user=request.user)
+        if entite_id:
+            qs = qs.filter(Q(dossier_id=entite_id) | Q(dossier__isnull=True))
+        else:
+            qs = qs.filter(dossier__isnull=True)
+
+        qs = qs.order_by('-cree_le')[:50]
         data = NotificationSerializer(qs, many=True).data
-        unread_count = Notification.objects.filter(user=request.user, lu=False).count()
+
+        unread_qs = Notification.objects.filter(user=request.user, lu=False)
+        if entite_id:
+            unread_qs = unread_qs.filter(Q(dossier_id=entite_id) | Q(dossier__isnull=True))
+        else:
+            unread_qs = unread_qs.filter(dossier__isnull=True)
+        unread_count = unread_qs.count()
+
         return Response({
             'results': data,
             'unread_count': unread_count,
@@ -40,7 +56,16 @@ class NotificationMarkAllReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        count = Notification.objects.filter(user=request.user, lu=False).update(lu=True)
+        entite_id = request.headers.get('X-Entite-ID')
+        from django.db.models import Q
+        
+        qs = Notification.objects.filter(user=request.user, lu=False)
+        if entite_id:
+            qs = qs.filter(Q(dossier_id=entite_id) | Q(dossier__isnull=True))
+        else:
+            qs = qs.filter(dossier__isnull=True)
+            
+        count = qs.update(lu=True)
         return Response({'marked': count})
 
 

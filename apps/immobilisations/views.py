@@ -8,6 +8,16 @@ from .serializers import ImmobilisationSerializer
 class ImmobilisationViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = Immobilisation.objects.all()
     serializer_class = ImmobilisationSerializer
+    def perform_create(self, serializer):
+        immo = serializer.save()
+        immo.calculate_current_state()
+        immo.save()
+
+    def perform_update(self, serializer):
+        immo = serializer.save()
+        immo.calculate_current_state()
+        immo.save()
+
     @action(detail=False, methods=['get'])
     def sites(self, request):
         from apps.parametres.models import Succursale
@@ -17,35 +27,5 @@ class ImmobilisationViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def amortissement(self, request, pk=None):
         immo = self.get_object()
-        plan = []
-        vnc = float(immo.valeurAcquisition)
-        
-        # Coeff dégressif simplifié, en réalité dépend des règles fiscales
-        taux = 1.0 / immo.duree if immo.methode == Immobilisation.Methode.LINEAIRE else (1.0 / immo.duree) * 1.5
-
-        cumul = 0.0
-        for i in range(1, immo.duree + 1):
-            if immo.methode == Immobilisation.Methode.LINEAIRE:
-                # En linéaire pur, la dotation est constante basée sur la valeur d'acquisition
-                dotation = float(immo.valeurAcquisition) * taux
-            else:
-                # En dégressif, la dotation est basée sur la VNC
-                dotation = vnc * taux
-                
-            # Pour la dernière année, on s'assure d'amortir complètement
-            if i == immo.duree and vnc < dotation:
-                dotation = vnc
-
-            base = float(immo.valeurAcquisition) if immo.methode == Immobilisation.Methode.LINEAIRE else vnc
-            vnc -= dotation
-            cumul += dotation
-
-            plan.append({
-                'annee': i,
-                'baseAmortissable': round(base, 2),
-                'dotation': round(dotation, 2),
-                'cumul': round(cumul, 2),
-                'vnc': round(max(vnc, 0), 2)
-            })
-
+        plan = immo.get_amortissement_plan()
         return Response(plan)

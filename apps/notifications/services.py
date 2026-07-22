@@ -10,6 +10,7 @@ User = get_user_model()
 def send_notification(
     *,
     user=None,          # User instance or None for broadcast
+    dossier=None,       # Dossier instance or None
     titre: str,
     message: str,
     type: str = Notification.Type.INFO,
@@ -23,6 +24,7 @@ def send_notification(
     """
     notif = Notification.objects.create(
         user=user,
+        dossier=dossier,
         titre=titre,
         message=message,
         type=type,
@@ -35,6 +37,7 @@ def send_notification(
         'type': 'notification_message',
         'notification': {
             'id': str(notif.id),
+            'dossier_id': str(notif.dossier_id) if notif.dossier_id else None,
             'titre': notif.titre,
             'message': notif.message,
             'type': notif.type,
@@ -59,12 +62,13 @@ def send_notification(
     return notif
 
 
-def notify_all_admins(titre: str, message: str, type: str, module: str, action_url: str | None = None, meta: dict | None = None):
+def notify_all_admins(titre: str, message: str, type: str, module: str, action_url: str | None = None, meta: dict | None = None, dossier=None):
     """Envoie une notification à tous les Super Admin connectés."""
     admins = User.objects.filter(role='Super Admin', is_active=True)
     for admin in admins:
         send_notification(
             user=admin,
+            dossier=dossier,
             titre=titre,
             message=message,
             type=type,
@@ -74,12 +78,13 @@ def notify_all_admins(titre: str, message: str, type: str, module: str, action_u
         )
 
 
-def notify_roles(roles: list, titre: str, message: str, type: str, module: str, action_url: str | None = None, meta: dict | None = None):
+def notify_roles(roles: list, titre: str, message: str, type: str, module: str, action_url: str | None = None, meta: dict | None = None, dossier=None):
     """Envoie une notification à tous les utilisateurs ayant un rôle donné."""
     users = User.objects.filter(role__in=roles, is_active=True)
     for user in users:
         send_notification(
             user=user,
+            dossier=dossier,
             titre=titre,
             message=message,
             type=type,
