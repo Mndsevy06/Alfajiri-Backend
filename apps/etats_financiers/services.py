@@ -3,51 +3,106 @@ from django.db.models.functions import Coalesce
 from decimal import Decimal
 from apps.plan_comptable.models import CompteComptable
 from apps.saisie.models import LigneEcriture, Ecriture
+from apps.parametres.models import Dossier
 
 def get_balance(date_debut=None, date_fin=None, entite_id=None):
     """
-    Retourne la balance de tous les comptes ayant eu un mouvement.
+    Retourne la balance de tous les comptes ayant eu un mouvement, avec solde d'ouverture,
+    mouvements de la période et solde de clôture basés sur l'exercice comptable.
     """
-    lignes = LigneEcriture.objects.filter(ecriture__statut=Ecriture.Statut.VALIDE)
-    
     if entite_id:
-        lignes = lignes.filter(dossier_id=entite_id)
-    else:
-        lignes = lignes.none()
-        
+        try:
+            dossier = Dossier.objects.get(id=entite_id)
+            if not date_debut:
+                date_debut = dossier.dateDebut
+            if not date_fin:
+                date_fin = dossier.dateFin
+        except Dossier.DoesNotExist:
+            pass
+
+    # Lignes avant la date de début (Solde d'ouverture)
+    lignes_ouv = LigneEcriture.objects.filter(ecriture__statut=Ecriture.Statut.VALIDE)
+    if entite_id:
+        lignes_ouv = lignes_ouv.filter(dossier_id=entite_id)
     if date_debut:
-        lignes = lignes.filter(date__gte=date_debut)
-    if date_fin:
-        lignes = lignes.filter(date__lte=date_fin)
-        
-    comptes_mouvements = lignes.values(
+        lignes_ouv = lignes_ouv.filter(date__lt=date_debut)
+
+    ouv_data = lignes_ouv.values(
         'compte__numero', 'compte__libelle', 'compte__sens_normal'
     ).annotate(
         total_debit=Coalesce(Sum('debit'), Decimal('0.00')),
         total_credit=Coalesce(Sum('credit'), Decimal('0.00')),
-    ).order_by('compte__numero')
+    )
+
+    # Lignes dans la période (Mouvements)
+    lignes_mvt = LigneEcriture.objects.filter(ecriture__statut=Ecriture.Statut.VALIDE)
+    if entite_id:
+        lignes_mvt = lignes_mvt.filter(dossier_id=entite_id)
+    if date_debut:
+        lignes_mvt = lignes_mvt.filter(date__gte=date_debut)
+    if date_fin:
+        lignes_mvt = lignes_mvt.filter(date__lte=date_fin)
+
+    mvt_data = lignes_mvt.values(
+        'compte__numero', 'compte__libelle', 'compte__sens_normal'
+    ).annotate(
+        total_debit=Coalesce(Sum('debit'), Decimal('0.00')),
+        total_credit=Coalesce(Sum('credit'), Decimal('0.00')),
+    )
+
+    comptes_dict = {}
+
+    for row in ouv_data:
+        c_num = row['compte__numero']
+        diff = row['total_debit'] - row['total_credit']
+        sd = diff if diff > 0 else Decimal('0.00')
+        sc = abs(diff) if diff < 0 else Decimal('0.00')
+
+        comptes_dict[c_num] = {
+            'compte': c_num,
+            'libelle': row['compte__libelle'],
+            'sens_normal': row['compte__sens_normal'],
+            'solde_ouv_debit': sd,
+            'solde_ouv_credit': sc,
+            'mvt_debit': Decimal('0.00'),
+            'mvt_credit': Decimal('0.00'),
+        }
+
+    for row in mvt_data:
+        c_num = row['compte__numero']
+        if c_num not in comptes_dict:
+            comptes_dict[c_num] = {
+                'compte': c_num,
+                'libelle': row['compte__libelle'],
+                'sens_normal': row['compte__sens_normal'],
+                'solde_ouv_debit': Decimal('0.00'),
+                'solde_ouv_credit': Decimal('0.00'),
+                'mvt_debit': Decimal('0.00'),
+                'mvt_credit': Decimal('0.00'),
+            }
+        comptes_dict[c_num]['mvt_debit'] = row['total_debit']
+        comptes_dict[c_num]['mvt_credit'] = row['total_credit']
 
     balance = []
-    for c in comptes_mouvements:
-        solde_debit = Decimal('0.00')
-        solde_credit = Decimal('0.00')
-        
-        diff = c['total_debit'] - c['total_credit']
-        if diff > 0:
-            solde_debit = diff
-        elif diff < 0:
-            solde_credit = abs(diff)
+    for c_num in sorted(comptes_dict.keys()):
+        c = comptes_dict[c_num]
 
-        balance.append({
-            'compte': c['compte__numero'],
-            'libelle': c['compte__libelle'],
-            'sens_normal': c['compte__sens_normal'],
-            'debit': c['total_debit'],
-            'credit': c['total_credit'],
-            'solde_debit': solde_debit,
-            'solde_credit': solde_credit,
-        })
-        
+        total_debit_fin = c['solde_ouv_debit'] + c['mvt_debit']
+        total_credit_fin = c['solde_ouv_credit'] + c['mvt_credit']
+        diff = total_debit_fin - total_credit_fin
+
+        solde_fin_debit = diff if diff > 0 else Decimal('0.00')
+        solde_fin_credit = abs(diff) if diff < 0 else Decimal('0.00')
+
+        c['solde_fin_debit'] = solde_fin_debit
+        c['solde_fin_credit'] = solde_fin_credit
+        c['debit'] = c['mvt_debit']
+        c['credit'] = c['mvt_credit']
+        c['solde_debit'] = solde_fin_debit
+        c['solde_credit'] = solde_fin_credit
+
+        balance.append(c)
+
     return balance
 
 def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_id=None):

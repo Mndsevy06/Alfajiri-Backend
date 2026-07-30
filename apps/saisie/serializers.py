@@ -13,8 +13,8 @@ class LigneEcritureSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LigneEcriture
-        fields = ['id', 'date', 'compte', 'libelleCompte', 'libelle', 'debit', 'credit', 'centre_cout', 'tiers_auxiliaire', 'fichier', 'fichier_base64', 'fichier_nom', 'fichier_url']
-        read_only_fields = ['id', 'fichier']
+        fields = ['id', 'numero_ligne', 'date', 'compte', 'libelleCompte', 'libelle', 'debit', 'credit', 'centre_cout', 'tiers_auxiliaire', 'fichier', 'fichier_base64', 'fichier_nom', 'fichier_url']
+        read_only_fields = ['id', 'fichier', 'numero_ligne']
 
 class EcritureSerializer(serializers.ModelSerializer):
     lignes = LigneEcritureSerializer(many=True)
@@ -68,23 +68,31 @@ class EcritureSerializer(serializers.ModelSerializer):
         journal = validated_data['journal']
         date = validated_data.get('date')
         
-        # Incrémenter le dernier numéro du journal
-        journal.dernierNumero += 1
-        journal.save()
-        
-        # Générer le numéro unique par le backend
+        # Générer le numéro unique par le backend en s'assurant qu'il n'existe pas déjà
         year = date.year
-        seq = str(journal.dernierNumero).zfill(5)
-        numero_genere = f"{journal.code}-{year}-{seq}"
+        while True:
+            journal.dernierNumero += 1
+            seq = str(journal.dernierNumero).zfill(5)
+            numero_genere = f"{journal.code}-{year}-{seq}"
+            if not Ecriture.objects.filter(numero=numero_genere).exists() and not Ecriture.objects.filter(piece=f"PC-{numero_genere}").exists():
+                break
+        journal.save()
         
         validated_data['numero'] = numero_genere
         validated_data['piece'] = f"PC-{numero_genere}"
 
         ecriture = Ecriture.objects.create(**validated_data)
         
-        for ligne_data in lignes_data:
+        # Créer chaque ligne avec son numéro unique
+        for idx, ligne_data in enumerate(lignes_data, start=1):
             ligne_data = self._process_fichier(ligne_data)
-            LigneEcriture.objects.create(ecriture=ecriture, dossier=ecriture.dossier, **ligne_data)
+            numero_ligne = f"PC-{numero_genere}/L{str(idx).zfill(2)}"
+            LigneEcriture.objects.create(
+                ecriture=ecriture,
+                dossier=ecriture.dossier,
+                numero_ligne=numero_ligne,
+                **ligne_data
+            )
         return ecriture
 
     def update(self, instance, validated_data):
@@ -102,11 +110,17 @@ class EcritureSerializer(serializers.ModelSerializer):
         
         instance.save()
 
-        # Update Lignes: simplest way is to delete old and create new
+        # Update Lignes: supprimer les anciennes et recréer avec nouveaux numéros de ligne
         if lignes_data is not None:
             instance.lignes.all().delete()
-            for ligne_data in lignes_data:
+            for idx, ligne_data in enumerate(lignes_data, start=1):
                 ligne_data = self._process_fichier(ligne_data)
-                LigneEcriture.objects.create(ecriture=instance, dossier=instance.dossier, **ligne_data)
+                numero_ligne = f"PC-{instance.numero}/L{str(idx).zfill(2)}"
+                LigneEcriture.objects.create(
+                    ecriture=instance,
+                    dossier=instance.dossier,
+                    numero_ligne=numero_ligne,
+                    **ligne_data
+                )
 
         return instance
