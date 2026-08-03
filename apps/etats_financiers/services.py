@@ -103,6 +103,77 @@ def get_balance(date_debut=None, date_fin=None, entite_id=None):
 
         balance.append(c)
 
+    # Roll-up logic: Aggregate child account balances into their parent accounts
+    # Get all parent accounts mapping
+    parent_map = {}
+    comptes = CompteComptable.objects.all().select_related('parent')
+    compte_objs = {c.numero: c for c in comptes}
+    
+    for c in comptes:
+        if c.parent:
+            parent_map[c.numero] = c.parent.numero
+            
+    # Function to add to parent
+    def add_to_parent(child_dict):
+        c_num = child_dict['compte']
+        parent_num = parent_map.get(c_num)
+        
+        # Or try by string prefix if parent isn't explicitly set for 6-digit accounts
+        if not parent_num and len(c_num) > 4:
+            # e.g., 411101 -> 411100
+            possible_parent = c_num[:4] + '00'
+            if possible_parent in compte_objs and possible_parent != c_num:
+                parent_num = possible_parent
+
+        if parent_num:
+            if parent_num not in comptes_dict:
+                parent_obj = compte_objs.get(parent_num)
+                comptes_dict[parent_num] = {
+                    'compte': parent_num,
+                    'libelle': parent_obj.libelle if parent_obj else parent_num,
+                    'sens_normal': parent_obj.sens_normal if parent_obj else 'aucun',
+                    'solde_ouv_debit': Decimal('0.00'),
+                    'solde_ouv_credit': Decimal('0.00'),
+                    'mvt_debit': Decimal('0.00'),
+                    'mvt_credit': Decimal('0.00'),
+                    'solde_fin_debit': Decimal('0.00'),
+                    'solde_fin_credit': Decimal('0.00'),
+                    'debit': Decimal('0.00'),
+                    'credit': Decimal('0.00'),
+                    'solde_debit': Decimal('0.00'),
+                    'solde_credit': Decimal('0.00'),
+                    'is_parent': True
+                }
+            
+            p = comptes_dict[parent_num]
+            p['solde_ouv_debit'] += child_dict['solde_ouv_debit']
+            p['solde_ouv_credit'] += child_dict['solde_ouv_credit']
+            p['mvt_debit'] += child_dict['mvt_debit']
+            p['mvt_credit'] += child_dict['mvt_credit']
+            p['debit'] += child_dict['debit']
+            p['credit'] += child_dict['credit']
+            
+            # Recalculate parent ending balance
+            total_debit_fin = p['solde_ouv_debit'] + p['mvt_debit']
+            total_credit_fin = p['solde_ouv_credit'] + p['mvt_credit']
+            diff = total_debit_fin - total_credit_fin
+            p['solde_fin_debit'] = diff if diff > 0 else Decimal('0.00')
+            p['solde_fin_credit'] = abs(diff) if diff < 0 else Decimal('0.00')
+            p['solde_debit'] = p['solde_fin_debit']
+            p['solde_credit'] = p['solde_fin_credit']
+            
+            # Recursive rollup if parent has a parent
+            add_to_parent(p)
+
+    # Need a copy of initial keys to avoid mutating dict while iterating
+    initial_keys = list(comptes_dict.keys())
+    for c_num in initial_keys:
+        # Only roll up if it's not a parent we just created (to avoid double counting in recursion)
+        if not comptes_dict[c_num].get('is_parent'):
+            add_to_parent(comptes_dict[c_num])
+
+    balance = list(comptes_dict.values())
+    balance.sort(key=lambda x: x['compte'])
     return balance
 
 def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_id=None):
@@ -110,7 +181,7 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_i
     Retourne le détail des écritures groupé par compte.
     """
     lignes = LigneEcriture.objects.filter(ecriture__statut=Ecriture.Statut.VALIDE).select_related(
-        'ecriture', 'ecriture__journal', 'compte'
+        'ecriture', 'ecriture__journal', 'compte', 'ecriture__saisiePar'
     ).order_by('compte__numero', 'date', 'ecriture__numero')
     
     if entite_id:
@@ -144,6 +215,9 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_i
             'libelle': ligne.libelle,
             'debit': ligne.debit,
             'credit': ligne.credit,
+            'saisi_par': ligne.ecriture.saisiePar.username if ligne.ecriture.saisiePar else 'Système',
+            'saisi_le': ligne.ecriture.created_at.isoformat() if ligne.ecriture.created_at else None,
+            'valide_le': ligne.ecriture.validated_at.isoformat() if ligne.ecriture.validated_at else None,
         })
         grand_livre[c_num]['total_debit'] += ligne.debit
         grand_livre[c_num]['total_credit'] += ligne.credit

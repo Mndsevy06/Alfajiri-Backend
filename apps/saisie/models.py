@@ -17,6 +17,8 @@ class Ecriture(models.Model):
     saisiePar = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='ecritures_saisies')
     validePar = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ecritures_validees')
     piece = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    validated_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.numero} - {self.libelle}"

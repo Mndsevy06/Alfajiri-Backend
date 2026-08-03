@@ -29,6 +29,8 @@ class Dossier(models.Model):
     exerciceEnCours = models.CharField(max_length=4)
     dateDebut = models.DateField()
     dateFin = models.DateField()
+    compteClient = models.CharField(max_length=50, blank=True, null=True)
+    compteFournisseur = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
         return self.raisonSociale

@@ -117,17 +117,48 @@ class TiersViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
 
         # Auto-generate account based on type
         prefixes = {
-            'client': '411',
+            'client': '4111',
             'fournisseur': '401',
             'personnel': '422',
             'etat': '44',
             'associe': '462',
         }
-        prefix = prefixes.get(tiers.type, '411')
-        compte_numero = f"{prefix}{tiers.code}"
+        parent_prefixes = {
+            'client': '411100',
+            'fournisseur': '401100',
+            'personnel': '422000',
+            'etat': '440000',
+            'associe': '462000',
+        }
+        prefix = prefixes.get(tiers.type, '4111')
+        parent_prefix = parent_prefixes.get(tiers.type, '411100')
         
-        if not CompteComptable.objects.filter(numero=compte_numero).exists():
-            parent_compte = CompteComptable.objects.filter(numero=prefix).first()
+        # Generate sequential account number if it's not explicitly set to a valid one
+        compte_numero = tiers.compte
+        if not compte_numero or len(compte_numero) < 6:
+            from django.db.models import Max
+            max_compte = CompteComptable.objects.filter(
+                numero__startswith=prefix, 
+                type='auxiliaire'
+            ).aggregate(Max('numero'))['numero__max']
+            
+            if max_compte and len(max_compte) >= len(prefix) + 1:
+                try:
+                    # Extract the suffix and increment
+                    aux = int(max_compte[len(prefix):]) + 1
+                    # determine padding based on how many digits are needed to reach 6 total
+                    pad = 6 - len(prefix)
+                    if pad < 2: pad = 2 # at least 2 digits
+                    compte_numero = f"{prefix}{aux:0{pad}d}"
+                except ValueError:
+                    pad = max(6 - len(prefix), 2)
+                    compte_numero = f"{prefix}{1:0{pad}d}"
+            else:
+                pad = max(6 - len(prefix), 2)
+                compte_numero = f"{prefix}{1:0{pad}d}"
+
+        if not CompteComptable.objects.filter(numero=compte_numero, dossier=tiers.dossier).exists():
+            parent_compte = CompteComptable.objects.filter(numero=parent_prefix).first()
             CompteComptable.objects.create(
                 numero=compte_numero,
                 libelle=f"{tiers.nom}",
