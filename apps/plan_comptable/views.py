@@ -134,28 +134,33 @@ class TiersViewSet(DossierScopedViewSetMixin, viewsets.ModelViewSet):
         parent_prefix = parent_prefixes.get(tiers.type, '411100')
         
         # Generate sequential account number if it's not explicitly set to a valid one
+        # Generate sequential account number if it's not explicitly set to a valid one
         compte_numero = tiers.compte
-        if not compte_numero or len(compte_numero) < 6:
-            from django.db.models import Max
-            max_compte = CompteComptable.objects.filter(
+        if not compte_numero or len(compte_numero) < 6 or not compte_numero.isdigit():
+            existing_comptes = CompteComptable.objects.filter(
                 numero__startswith=prefix, 
                 type='auxiliaire'
-            ).aggregate(Max('numero'))['numero__max']
+            ).values_list('numero', flat=True)
             
-            if max_compte and len(max_compte) >= len(prefix) + 1:
-                try:
-                    # Extract the suffix and increment
-                    aux = int(max_compte[len(prefix):]) + 1
-                    # determine padding based on how many digits are needed to reach 6 total
-                    pad = 6 - len(prefix)
-                    if pad < 2: pad = 2 # at least 2 digits
-                    compte_numero = f"{prefix}{aux:0{pad}d}"
-                except ValueError:
-                    pad = max(6 - len(prefix), 2)
-                    compte_numero = f"{prefix}{1:0{pad}d}"
-            else:
-                pad = max(6 - len(prefix), 2)
-                compte_numero = f"{prefix}{1:0{pad}d}"
+            max_suffix = 0
+            for acc in existing_comptes:
+                if acc.isdigit() and acc.startswith(prefix):
+                    suffix_str = acc[len(prefix):]
+                    if suffix_str:
+                        try:
+                            val = int(suffix_str)
+                            if val > max_suffix:
+                                max_suffix = val
+                        except ValueError:
+                            pass
+                            
+            pad = max(6 - len(prefix), 2)
+            next_suffix = max_suffix + 1
+            compte_numero = f"{prefix}{next_suffix:0{pad}d}"
+            
+            while CompteComptable.objects.filter(numero=compte_numero, dossier=tiers.dossier).exists():
+                next_suffix += 1
+                compte_numero = f"{prefix}{next_suffix:0{pad}d}"
 
         if not CompteComptable.objects.filter(numero=compte_numero, dossier=tiers.dossier).exists():
             parent_compte = CompteComptable.objects.filter(numero=parent_prefix).first()

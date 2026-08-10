@@ -72,5 +72,8 @@ class CompteComptable(models.Model):
     soldeDebit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     soldeCredit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
+    class Meta:
+        ordering = ['numero']
+
     def __str__(self):
         return f"{self.numero} - {self.libelle}"

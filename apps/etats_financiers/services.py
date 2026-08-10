@@ -5,7 +5,7 @@ from apps.plan_comptable.models import CompteComptable
 from apps.saisie.models import LigneEcriture, Ecriture
 from apps.parametres.models import Dossier
 
-def get_balance(date_debut=None, date_fin=None, entite_id=None):
+def get_balance(date_debut=None, date_fin=None, compte_debut=None, compte_fin=None, journal=None, entite_id=None):
     """
     Retourne la balance de tous les comptes ayant eu un mouvement, avec solde d'ouverture,
     mouvements de la période et solde de clôture basés sur l'exercice comptable.
@@ -26,9 +26,13 @@ def get_balance(date_debut=None, date_fin=None, entite_id=None):
         lignes_ouv = lignes_ouv.filter(dossier_id=entite_id)
     if date_debut:
         lignes_ouv = lignes_ouv.filter(date__lt=date_debut)
+    if compte_debut:
+        lignes_ouv = lignes_ouv.filter(compte__numero__gte=compte_debut)
+    if compte_fin:
+        lignes_ouv = lignes_ouv.filter(compte__numero__lte=compte_fin)
 
     ouv_data = lignes_ouv.values(
-        'compte__numero', 'compte__libelle', 'compte__sens_normal'
+        'compte__numero', 'compte__libelle', 'compte__sens_normal', 'compte__code_poste_etats_financiers'
     ).annotate(
         total_debit=Coalesce(Sum('debit'), Decimal('0.00')),
         total_credit=Coalesce(Sum('credit'), Decimal('0.00')),
@@ -42,9 +46,15 @@ def get_balance(date_debut=None, date_fin=None, entite_id=None):
         lignes_mvt = lignes_mvt.filter(date__gte=date_debut)
     if date_fin:
         lignes_mvt = lignes_mvt.filter(date__lte=date_fin)
+    if compte_debut:
+        lignes_mvt = lignes_mvt.filter(compte__numero__gte=compte_debut)
+    if compte_fin:
+        lignes_mvt = lignes_mvt.filter(compte__numero__lte=compte_fin)
+    if journal:
+        lignes_mvt = lignes_mvt.filter(ecriture__journal__code=journal)
 
     mvt_data = lignes_mvt.values(
-        'compte__numero', 'compte__libelle', 'compte__sens_normal'
+        'compte__numero', 'compte__libelle', 'compte__sens_normal', 'compte__code_poste_etats_financiers'
     ).annotate(
         total_debit=Coalesce(Sum('debit'), Decimal('0.00')),
         total_credit=Coalesce(Sum('credit'), Decimal('0.00')),
@@ -62,6 +72,7 @@ def get_balance(date_debut=None, date_fin=None, entite_id=None):
             'compte': c_num,
             'libelle': row['compte__libelle'],
             'sens_normal': row['compte__sens_normal'],
+            'code_afs': row.get('compte__code_poste_etats_financiers') or '',
             'solde_ouv_debit': sd,
             'solde_ouv_credit': sc,
             'mvt_debit': Decimal('0.00'),
@@ -75,6 +86,7 @@ def get_balance(date_debut=None, date_fin=None, entite_id=None):
                 'compte': c_num,
                 'libelle': row['compte__libelle'],
                 'sens_normal': row['compte__sens_normal'],
+                'code_afs': row.get('compte__code_poste_etats_financiers') or '',
                 'solde_ouv_debit': Decimal('0.00'),
                 'solde_ouv_credit': Decimal('0.00'),
                 'mvt_debit': Decimal('0.00'),
@@ -103,85 +115,95 @@ def get_balance(date_debut=None, date_fin=None, entite_id=None):
 
         balance.append(c)
 
-    # Roll-up logic: Aggregate child account balances into their parent accounts
-    # Get all parent accounts mapping
+    # ─── Sauvegarde des mouvements BRUTS avant roll-up ─────────────────────────
+    # Ces valeurs représentent les mouvements DIRECTS de chaque compte,
+    # sans agrégation des enfants. Leur somme sur tous les comptes
+    # est garantie équilibrée (D = C) car toutes les écritures sont validées.
+    for c_num in comptes_dict:
+        c = comptes_dict[c_num]
+        c['own_mvt_debit']     = c['mvt_debit']
+        c['own_mvt_credit']    = c['mvt_credit']
+        c['own_solde_ouv_debit']  = c['solde_ouv_debit']
+        c['own_solde_ouv_credit'] = c['solde_ouv_credit']
+
+    # ─── Roll-up : agrégation des enfants vers les parents ──────────────────────
+    # On charge la carte parent une seule fois depuis la DB.
+    all_comptes = CompteComptable.objects.all().select_related('parent')
+    compte_objs = {c.numero: c for c in all_comptes}
+
     parent_map = {}
-    comptes = CompteComptable.objects.all().select_related('parent')
-    compte_objs = {c.numero: c for c in comptes}
-    
-    for c in comptes:
+    for c in all_comptes:
         if c.parent:
             parent_map[c.numero] = c.parent.numero
-            
-    # Function to add to parent
-    def add_to_parent(child_dict):
-        c_num = child_dict['compte']
-        parent_num = parent_map.get(c_num)
-        
-        # Or try by string prefix if parent isn't explicitly set for 6-digit accounts
-        if not parent_num and len(c_num) > 4:
-            # e.g., 411101 -> 411100
-            possible_parent = c_num[:4] + '00'
-            if possible_parent in compte_objs and possible_parent != c_num:
-                parent_num = possible_parent
 
-        if parent_num:
-            if parent_num not in comptes_dict:
-                parent_obj = compte_objs.get(parent_num)
-                comptes_dict[parent_num] = {
-                    'compte': parent_num,
-                    'libelle': parent_obj.libelle if parent_obj else parent_num,
-                    'sens_normal': parent_obj.sens_normal if parent_obj else 'aucun',
-                    'solde_ouv_debit': Decimal('0.00'),
-                    'solde_ouv_credit': Decimal('0.00'),
-                    'mvt_debit': Decimal('0.00'),
-                    'mvt_credit': Decimal('0.00'),
-                    'solde_fin_debit': Decimal('0.00'),
-                    'solde_fin_credit': Decimal('0.00'),
-                    'debit': Decimal('0.00'),
-                    'credit': Decimal('0.00'),
-                    'solde_debit': Decimal('0.00'),
-                    'solde_credit': Decimal('0.00'),
-                    'is_parent': True
-                }
-            
-            p = comptes_dict[parent_num]
-            p['solde_ouv_debit'] += child_dict['solde_ouv_debit']
-            p['solde_ouv_credit'] += child_dict['solde_ouv_credit']
-            p['mvt_debit'] += child_dict['mvt_debit']
-            p['mvt_credit'] += child_dict['mvt_credit']
-            p['debit'] += child_dict['debit']
-            p['credit'] += child_dict['credit']
-            
-            # Recalculate parent ending balance
-            total_debit_fin = p['solde_ouv_debit'] + p['mvt_debit']
-            total_credit_fin = p['solde_ouv_credit'] + p['mvt_credit']
-            diff = total_debit_fin - total_credit_fin
-            p['solde_fin_debit'] = diff if diff > 0 else Decimal('0.00')
-            p['solde_fin_credit'] = abs(diff) if diff < 0 else Decimal('0.00')
-            p['solde_debit'] = p['solde_fin_debit']
-            p['solde_credit'] = p['solde_fin_credit']
-            
-            # Recursive rollup if parent has a parent
-            add_to_parent(p)
+    def get_parent_num(c_num):
+        """Retourne le numéro du parent direct, ou None."""
+        parent = parent_map.get(c_num)
+        if not parent and len(c_num) > 4:
+            # Fallback préfixe : 411101 → 4111, puis 411, etc.
+            for length in range(len(c_num) - 1, 1, -1):
+                candidate = c_num[:length]
+                if candidate in compte_objs and candidate != c_num:
+                    return candidate
+        return parent
 
-    # Need a copy of initial keys to avoid mutating dict while iterating
-    initial_keys = list(comptes_dict.keys())
-    for c_num in initial_keys:
-        # Only roll up if it's not a parent we just created (to avoid double counting in recursion)
-        if not comptes_dict[c_num].get('is_parent'):
-            add_to_parent(comptes_dict[c_num])
+    # Trier les comptes du plus long au plus court (feuilles en premier)
+    # pour garantir un seul passage sans récursion ni double-comptage.
+    all_keys_sorted = sorted(comptes_dict.keys(), key=lambda x: -len(x))
+
+    for c_num in all_keys_sorted:
+        child = comptes_dict[c_num]
+        parent_num = get_parent_num(c_num)
+        if not parent_num:
+            continue
+
+        # Créer le parent à la volée s'il n'existe pas encore
+        if parent_num not in comptes_dict:
+            parent_obj = compte_objs.get(parent_num)
+            comptes_dict[parent_num] = {
+                'compte': parent_num,
+                'libelle': parent_obj.libelle if parent_obj else parent_num,
+                'sens_normal': parent_obj.sens_normal if parent_obj else 'aucun',
+                'code_afs': (parent_obj.code_poste_etats_financiers or '') if parent_obj else '',
+                'solde_ouv_debit': Decimal('0.00'),
+                'solde_ouv_credit': Decimal('0.00'),
+                'mvt_debit': Decimal('0.00'),
+                'mvt_credit': Decimal('0.00'),
+                'solde_fin_debit': Decimal('0.00'),
+                'solde_fin_credit': Decimal('0.00'),
+                'debit': Decimal('0.00'),
+                'credit': Decimal('0.00'),
+                'solde_debit': Decimal('0.00'),
+                'solde_credit': Decimal('0.00'),
+                'is_parent': True,
+            }
+
+        p = comptes_dict[parent_num]
+        p.setdefault('is_parent', True)
+        p['solde_ouv_debit'] += child['solde_ouv_debit']
+        p['solde_ouv_credit'] += child['solde_ouv_credit']
+        p['mvt_debit']  += child['mvt_debit']
+        p['mvt_credit'] += child['mvt_credit']
+        p['debit']  += child['debit']
+        p['credit'] += child['credit']
+
+        # Recalcul du solde de clôture du parent
+        diff = (p['solde_ouv_debit'] + p['mvt_debit']) - (p['solde_ouv_credit'] + p['mvt_credit'])
+        p['solde_fin_debit']  = diff if diff > 0 else Decimal('0.00')
+        p['solde_fin_credit'] = abs(diff) if diff < 0 else Decimal('0.00')
+        p['solde_debit']  = p['solde_fin_debit']
+        p['solde_credit'] = p['solde_fin_credit']
 
     balance = list(comptes_dict.values())
     balance.sort(key=lambda x: x['compte'])
     return balance
 
-def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_id=None):
+def get_grand_livre(date_debut=None, date_fin=None, compte_debut=None, compte_fin=None, journal=None, entite_id=None):
     """
     Retourne le détail des écritures groupé par compte.
     """
     lignes = LigneEcriture.objects.filter(ecriture__statut=Ecriture.Statut.VALIDE).select_related(
-        'ecriture', 'ecriture__journal', 'compte', 'ecriture__saisiePar'
+        'ecriture', 'ecriture__journal', 'compte', 'ecriture__saisiePar', 'tiers_auxiliaire'
     ).order_by('compte__numero', 'date', 'ecriture__numero')
     
     if entite_id:
@@ -193,8 +215,12 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_i
         lignes = lignes.filter(date__gte=date_debut)
     if date_fin:
         lignes = lignes.filter(date__lte=date_fin)
-    if compte_numero:
-        lignes = lignes.filter(compte__numero__startswith=compte_numero)
+    if compte_debut:
+        lignes = lignes.filter(compte__numero__gte=compte_debut)
+    if compte_fin:
+        lignes = lignes.filter(compte__numero__lte=compte_fin)
+    if journal:
+        lignes = lignes.filter(ecriture__journal__code=journal)
         
     grand_livre = {}
     for ligne in lignes:
@@ -203,6 +229,7 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_i
             grand_livre[c_num] = {
                 'compte': c_num,
                 'libelle': ligne.compte.libelle,
+                'code_afs': ligne.compte.code_poste_etats_financiers or '',
                 'total_debit': Decimal('0.00'),
                 'total_credit': Decimal('0.00'),
                 'ecritures': []
@@ -212,9 +239,18 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_i
             'date': ligne.date,
             'journal': ligne.ecriture.journal.code,
             'piece': ligne.ecriture.piece or ligne.ecriture.numero,
+            'batch_number': ligne.ecriture.numero,
+            'numero_facture': ligne.ecriture.numero_facture,
             'libelle': ligne.libelle,
+            'tiers_nom': ligne.tiers_auxiliaire.nom if ligne.tiers_auxiliaire else '',
+            'tiers_code': ligne.tiers_auxiliaire.code if ligne.tiers_auxiliaire else '',
+            'code_afs': ligne.compte.code_poste_etats_financiers or '',
             'debit': ligne.debit,
             'credit': ligne.credit,
+            'devise_origine': ligne.devise_origine,
+            'taux_change': ligne.taux_change,
+            'montant_debit_origine': ligne.montant_debit_origine,
+            'montant_credit_origine': ligne.montant_credit_origine,
             'saisi_par': ligne.ecriture.saisiePar.username if ligne.ecriture.saisiePar else 'Système',
             'saisi_le': ligne.ecriture.created_at.isoformat() if ligne.ecriture.created_at else None,
             'valide_le': ligne.ecriture.validated_at.isoformat() if ligne.ecriture.validated_at else None,
@@ -224,6 +260,66 @@ def get_grand_livre(date_debut=None, date_fin=None, compte_numero=None, entite_i
         
     # Transformer en liste
     return list(grand_livre.values())
+
+def get_balance_auxiliaire(date_debut=None, date_fin=None, compte_debut=None, compte_fin=None, journal=None, entite_id=None):
+    """
+    Balance auxiliaire générale : ventilation des mouvements par Tiers (fournisseurs, clients, etc.).
+    Chaque ligne = un tiers × un compte général.
+    Structure identique à la balance générale mais groupée par tiers_auxiliaire.
+    Correspond à la 'Balance Auxiliaire' des fichiers EDC/IKO de référence.
+    """
+    from apps.plan_comptable.models import Tiers
+    
+    lignes = LigneEcriture.objects.filter(
+        ecriture__statut=Ecriture.Statut.VALIDE,
+        tiers_auxiliaire__isnull=False  # seulement les lignes avec un tiers
+    ).select_related('ecriture', 'compte', 'tiers_auxiliaire', 'ecriture__journal')
+    
+    if entite_id:
+        lignes = lignes.filter(dossier_id=entite_id)
+    else:
+        lignes = lignes.none()
+    if date_debut:
+        lignes = lignes.filter(date__gte=date_debut)
+    if date_fin:
+        lignes = lignes.filter(date__lte=date_fin)
+    if compte_debut:
+        lignes = lignes.filter(compte__numero__gte=compte_debut)
+    if compte_fin:
+        lignes = lignes.filter(compte__numero__lte=compte_fin)
+    if journal:
+        lignes = lignes.filter(ecriture__journal__code=journal)
+
+    tiers_dict = {}
+    for ligne in lignes:
+        tiers = ligne.tiers_auxiliaire
+        cle = f"{tiers.code}|{ligne.compte.numero}"
+        
+        if cle not in tiers_dict:
+            tiers_dict[cle] = {
+                'tiers_code': tiers.code,
+                'tiers_nom': tiers.nom,
+                'tiers_type': tiers.type,
+                'compte': ligne.compte.numero,
+                'libelle_compte': ligne.compte.libelle,
+                'code_afs': ligne.compte.code_poste_etats_financiers or '',
+                'mvt_debit': Decimal('0.00'),
+                'mvt_credit': Decimal('0.00'),
+            }
+        
+        tiers_dict[cle]['mvt_debit'] += ligne.debit
+        tiers_dict[cle]['mvt_credit'] += ligne.credit
+
+    result = []
+    for item in tiers_dict.values():
+        diff = item['mvt_debit'] - item['mvt_credit']
+        item['solde_debit'] = diff if diff > 0 else Decimal('0.00')
+        item['solde_credit'] = abs(diff) if diff < 0 else Decimal('0.00')
+        result.append(item)
+    
+    # Tri par type de tiers, puis par code tiers, puis par compte
+    result.sort(key=lambda x: (x['tiers_type'], x['tiers_code'], x['compte']))
+    return result
 
 def get_bilan(entite_id=None):
     """
@@ -270,19 +366,19 @@ def get_bilan(entite_id=None):
         }
 
         # Mapping des catégories JSON vers notre dictionnaire
-        if poste_brut == 'Actif - Immobilisations':
+        if poste_brut == 'Actif - Immobilisations' or poste_brut in ['AM', 'AN', 'AS']:
             bilan['actif']['actif_immobilise'].append(item)
             bilan['actif']['total'] += solde
-        elif poste_brut == 'Actif - Stocks':
+        elif poste_brut == 'Actif - Stocks' or poste_brut == 'BB':
             bilan['actif']['actif_circulant'].append(item)
             bilan['actif']['total'] += solde
-        elif poste_brut == 'Passif - Capitaux propres et Dettes':
-            if c_num.startswith('16'):
+        elif poste_brut == 'Passif - Capitaux propres et Dettes' or poste_brut in ['CA', 'CE', 'CF', 'CH', 'CI', 'DA', 'DF']:
+            if c_num.startswith('16') or poste_brut in ['DA', 'DF']:
                 bilan['passif']['dettes_financieres'].append(item)
             else:
                 bilan['passif']['capitaux_propres'].append(item)
             bilan['passif']['total'] += solde
-        elif poste_brut == 'Actif/Passif - Tiers':
+        elif poste_brut == 'Actif/Passif - Tiers' or poste_brut in ['DK', 'DH', 'BH', 'BI', 'DI', 'DJ']:
             if solde > 0:
                 bilan['actif']['actif_circulant'].append(item)
                 bilan['actif']['total'] += solde
@@ -290,7 +386,7 @@ def get_bilan(entite_id=None):
                 item['montant'] = -solde
                 bilan['passif']['passif_circulant'].append(item)
                 bilan['passif']['total'] += -solde
-        elif poste_brut == 'Actif/Passif - Trésorerie' or 'Trésorerie' in str(poste_brut):
+        elif poste_brut == 'Actif/Passif - Trésorerie' or 'Trésorerie' in str(poste_brut) or poste_brut in ['BS', 'DQ']:
             if solde > 0:
                 bilan['actif']['tresorerie_actif'].append(item)
                 bilan['actif']['total'] += solde
@@ -388,14 +484,26 @@ def get_compte_resultat(entite_id=None):
         }
 
         # Mapping des catégories JSON
-        if poste_brut == 'Compte de résultat - Produits' or c_num[0] == '7':
-            if c_num.startswith('77'):
+        is_produit = (
+            poste_brut == 'Compte de résultat - Produits' or 
+            (isinstance(poste_brut, str) and (poste_brut.startswith('T') or poste_brut == 'RS')) or 
+            c_num[0] == '7'
+        )
+        is_charge = (
+            poste_brut == 'Compte de résultat - Charges' or 
+            poste_brut == 'Compte de résultat - HAO' or
+            (isinstance(poste_brut, str) and (poste_brut.startswith('R') or poste_brut in ['RP', 'TO'])) or 
+            c_num[0] == '6' or c_num[0] == '8'
+        )
+
+        if is_produit:
+            if c_num.startswith('77') or poste_brut == 'TK':
                 cr['produits']['produits_financiers'].append(item)
             else:
                 cr['produits']['produits_exploitation'].append(item)
             cr['produits']['total'] += solde
-        elif poste_brut == 'Compte de résultat - Charges' or c_num[0] == '6':
-            if c_num.startswith('67'):
+        elif is_charge:
+            if c_num.startswith('67') or poste_brut == 'RK':
                 cr['charges']['charges_financieres'].append(item)
             else:
                 cr['charges']['charges_exploitation'].append(item)
@@ -424,7 +532,8 @@ def get_journaux_centralisation(date_debut=None, date_fin=None, entite_id=None):
     journaux_data = lignes.values(
         'ecriture__journal__code', 'ecriture__journal__libelle'
     ).annotate(
-        total_mouvement=Coalesce(Sum('debit'), Decimal('0.00')),
+        # Bug #5 corrigé : total_mouvement = débit + crédit (volume total)
+        total_mouvement=Coalesce(Sum('debit'), Decimal('0.00')) + Coalesce(Sum('credit'), Decimal('0.00')),
         nombre_ecritures=Count('ecriture', distinct=True)
     ).order_by('ecriture__journal__code')
     

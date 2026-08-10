@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .services import get_balance, get_grand_livre, get_bilan, get_compte_resultat, get_journaux_centralisation, get_tafire
+from .services import get_balance, get_grand_livre, get_bilan, get_compte_resultat, get_journaux_centralisation, get_tafire, get_balance_auxiliaire
 from .models import CloturePeriode
 from apps.saisie.models import Ecriture, LigneEcriture
 from apps.rapprochement.models import LigneReleve
@@ -14,7 +14,10 @@ class BalanceView(APIView):
         entite_id = request.headers.get('X-Entite-ID')
         date_debut = request.query_params.get('date_debut')
         date_fin = request.query_params.get('date_fin')
-        balance = get_balance(date_debut, date_fin, entite_id)
+        compte_debut = request.query_params.get('compte_debut')
+        compte_fin = request.query_params.get('compte_fin')
+        journal = request.query_params.get('journal')
+        balance = get_balance(date_debut, date_fin, compte_debut, compte_fin, journal, entite_id)
         return Response(balance)
 
 class GrandLivreView(APIView):
@@ -24,9 +27,24 @@ class GrandLivreView(APIView):
         entite_id = request.headers.get('X-Entite-ID')
         date_debut = request.query_params.get('date_debut')
         date_fin = request.query_params.get('date_fin')
-        compte_numero = request.query_params.get('compte')
-        grand_livre = get_grand_livre(date_debut, date_fin, compte_numero, entite_id)
+        compte_debut = request.query_params.get('compte_debut')
+        compte_fin = request.query_params.get('compte_fin')
+        journal = request.query_params.get('journal')
+        grand_livre = get_grand_livre(date_debut, date_fin, compte_debut, compte_fin, journal, entite_id)
         return Response(grand_livre)
+
+class BalanceAuxiliaireView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        entite_id = request.headers.get('X-Entite-ID')
+        date_debut = request.query_params.get('date_debut')
+        date_fin = request.query_params.get('date_fin')
+        compte_debut = request.query_params.get('compte_debut')
+        compte_fin = request.query_params.get('compte_fin')
+        journal = request.query_params.get('journal')
+        data = get_balance_auxiliaire(date_debut, date_fin, compte_debut, compte_fin, journal, entite_id)
+        return Response(data)
 
 class BilanView(APIView):
     permission_classes = [IsAuthenticated]

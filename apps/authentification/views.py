@@ -14,9 +14,14 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserCreateSerializer
         return UserSerializer
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get', 'patch'])
     def me(self, request):
         user = request.user
+        if request.method == 'PATCH':
+            serializer = self.get_serializer(user, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
         serializer = self.get_serializer(user)
         data = serializer.data
         
@@ -28,12 +33,18 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def reset_password(self, request, pk=None):
-        user = self.get_object()
+        # SEC-4: Seuls les Super Admin peuvent réinitialiser le mot de passe d'un autre utilisateur.
+        # Un utilisateur peut changer son propre mot de passe.
+        target_user = self.get_object()
+        if request.user.pk != target_user.pk and request.user.role not in ['Super Admin', 'Chef Comptable']:
+            return Response({'error': 'Permission refusée. Seul un Super Admin peut réinitialiser le mot de passe d\'un autre utilisateur.'}, status=status.HTTP_403_FORBIDDEN)
         new_password = request.data.get('password')
         if not new_password:
             return Response({'error': 'Le mot de passe est requis'}, status=status.HTTP_400_BAD_REQUEST)
-        user.set_password(new_password)
-        user.save()
+        if len(new_password) < 8:
+            return Response({'error': 'Le mot de passe doit contenir au moins 8 caractères.'}, status=status.HTTP_400_BAD_REQUEST)
+        target_user.set_password(new_password)
+        target_user.save()
         return Response({'status': 'Mot de passe réinitialisé avec succès'})
 
 class RolePermissionViewSet(viewsets.ModelViewSet):

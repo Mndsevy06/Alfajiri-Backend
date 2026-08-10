@@ -7,7 +7,7 @@ class Command(BaseCommand):
     help = 'Load OHADA plan comptable from JSON file'
 
     def handle(self, *args, **kwargs):
-        file_path = r'c:\Users\DELL\Desktop\Alphajiri\Code\Alfajiri\Docs\plan_compt.json'
+        file_path = r'c:\Users\DELL\Desktop\Alphajiri\Code\Alfajiri\Docs\plan_comptable.json'
         
         if not os.path.exists(file_path):
             self.stdout.write(self.style.ERROR(f"File not found: {file_path}"))

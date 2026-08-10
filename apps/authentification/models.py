@@ -49,6 +49,7 @@ class User(AbstractUser):
         related_name='utilisateurs',
         verbose_name=_('Dossiers assignés')
     )
+    preferences = models.JSONField(default=dict, blank=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
